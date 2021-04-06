@@ -1,0 +1,450 @@
+---
+title: "Política Monetária"
+author: "Finance Macro"
+output:
+   pdf_document:
+    toc: true
+    number_sections: true
+    includes:
+      in_header: header.tex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sidrar)
+library(tidyverse)
+library(tstools)
+library(BETS)
+library(ggthemes)
+library(scales)
+library(lubridate)
+library(timetk)
+library(knitr)
+library(seasonal)
+```
+
+# Introdução
+
+Este modelo possui exemplos de análises que o grupo de Política Monetária pode fazer
+
+## IPCA
+
+Aqui vamos analisar o IPCA cheio mensal e acumulado em 12 meses, assim como os respectivos pesos de cada grupo do IPCA
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+### Inflação cheia
+
+ipca <-
+  '/t/1737/n1/all/v/2266/p/all/d/v2266%2013' %>%
+  get_sidra(api=.) %>%
+  mutate(date = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  rename(indice = Valor) %>%
+  mutate(inflacao_mensal = (indice/lag(indice,1)-1)*100,
+         inflacao_anual = (indice/lag(indice,12)-1)*100) %>%
+  select(date, indice, inflacao_mensal, inflacao_anual) %>%
+  as_tibble()
+
+```
+
+```{r echo=FALSE,  fig.height=4, fig.width=8, message=FALSE, warning=FALSE, out.width="1\\linewidth", results='markup', size='tiny'}
+
+
+ipca %>%
+  select(date, inflacao_mensal, inflacao_anual) %>%
+ `colnames<-`(c('Data','Inflação mensal', 'Inflação anual')) %>%
+  tail(n= 12) %>%
+  kable(digits = 2)
+
+```
+
+```{r echo=FALSE}
+
+## plotando dois graficos - inflacao cheia e acumalada
+
+colours <- c("#990000","#737373")
+ipca %>%
+   select(date, inflacao_mensal, inflacao_anual)%>%
+   `colnames<-`(c('Data','IPCA mensal', 'IPCA acumulado em 12 meses')) %>%
+  gather(variavel, valor, -Data) %>%
+  filter(Data > '2019-12-01') %>%
+  ggplot(aes(Data,valor, colour = variavel)) +
+  geom_line(size=.8) +
+  facet_wrap(~variavel, scales = 'free') +
+  scale_color_manual(values = colours)+
+  theme_clean() +
+  theme(legend.position = 'none', axis.text.x = element_text(angle=90))+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  labs(x='', y='%', 
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+## coletando a inflação por grupo
+
+variacao <-
+  '/t/7060/n1/all/v/63/p/all/c315/7170,7445,7486,7558,7625,7660,7712,7766,7786/d/v63%202' %>%
+  get_sidra(api=.) %>%
+  mutate(date = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  select(date, "Geral, grupo, subgrupo, item e subitem", Valor) %>%
+  pivot_wider(names_from = "Geral, grupo, subgrupo, item e subitem", values_from= Valor)
+
+```
+
+
+```{r include=FALSE}
+## coletando o peso de cada grupo
+peso <-
+  "/t/7060/n1/all/v/66/p/all/c315/7170,7445,7486,7558,7625,7660,7712,7766,7786/d/v66%204" %>%
+  get_sidra(api=.) %>%
+  mutate(date = parse_date(`Mês (Código)`, format = "%Y%m")) %>%
+  select(date, "Geral, grupo, subgrupo, item e subitem", Valor) %>%
+  pivot_wider(names_from = "Geral, grupo, subgrupo, item e subitem", values_from = Valor)
+```
+
+```{r}
+tail(peso) %>%
+  kable(digits = 2)
+```
+
+```{r include=FALSE}
+# construindo a tabela de contribuição mensal de cada grupo no IPCA
+contribuicao <- ((variacao[,-1]* peso[,-1])/ 100) %>%
+  mutate(date= variacao$date) %>%
+  select(date, everything())
+  
+```
+
+```{r}
+contribuicao %>%
+  kable(digits = 2)
+  
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+## plotando o gráfico de contribuição
+
+colors <- c("#990000","#990000","#990000",
+            "#990000","#990000","#990000",
+            "#990000","#990000","#990000")
+
+variacao %>%
+  filter(date <"2021-01-01")%>%
+  gather(variavel, valor, -date) %>%
+  ggplot(aes(x=date, y=valor, colour = variavel)) +
+  geom_bar(aes(fill= variavel, colour = variavel), stat = 'identity') +
+  geom_hline(yintercept = 0, colour= 'black', linetype= 'dashed') +
+  scale_color_economist()+
+  scale_fill_economist()+
+  #scale_color_manual(values = colors)+
+  #scale_fill_manual(values = colors)+
+  theme_clean()+
+  theme(legend.position = 'none') +
+  facet_wrap(~variavel, scales = 'free') +
+  theme(legend.position = 'none', axis.text.x = element_text(angle=90))+
+  scale_x_date(labels = date_format("%b"), date_breaks = "1 month", limits = (c(as.Date("2020-01-01"),as.Date("2020-12-01")))) +
+  labs(x='', y='%',
+       title = "Variação mensal dos grupos do IPCA",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#gráfico peso
+
+peso %>%
+  filter(date <"2021-01-01")%>%
+  gather(variavel,valor, -date) %>%
+  ggplot(aes(x=date, y=valor, colour = variavel))+
+  geom_line(aes(fill=variavel, colour=variavel), size=1)+
+  facet_wrap(~variavel, scales = 'free')+
+  theme_clean()+
+  scale_color_economist()+
+  scale_fill_economist()+
+  theme(legend.position = 'none')+
+   theme(legend.position = 'none', axis.text.x = element_text(angle=90))+
+  scale_x_date(labels = date_format("%b"), date_breaks = "1 month") +
+  labs(x='', y='%',
+       title = "Variação mensal do peso dos grupos do IPCA",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+```
+
+```{r}
+#gráfico peso
+
+contribuicao %>%
+  filter(date <"2021-01-01")%>%
+  gather(variavel,valor, -date) %>%
+  ggplot(aes(x=date, y=valor, colour = variavel))+
+  geom_line(aes(fill=variavel, colour=variavel), size=1)+
+  facet_wrap(~variavel, scales = 'free')+
+  theme_clean()+
+  scale_color_economist()+
+  scale_fill_economist()+
+  theme(legend.position = 'none')+
+   theme(legend.position = 'none', axis.text.x = element_text(angle=90))+
+  scale_x_date(labels = date_format("%b"), date_breaks = "1 month") +
+  labs(x='', y='%',
+       title = "Variação mensal do peso dos grupos do IPCA",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+
+
+
+```{r include=FALSE}
+## transformando a tabela cotnribuição para o formato tidy
+library(reshape2)
+library(xts)
+
+contribuicao_long <-
+  contribuicao %>% 
+  gather(variavel, valor, -date)
+
+```
+
+```{r include=FALSE}
+## plotando
+
+library(reshape2)
+library(xts)
+
+inflacao <- round(rowSums(contribuicao[,-1]),2)
+inflacao <- xts(inflacao, order.by = contribuicao$date) 
+inflacao <- data.frame(time=index(contribuicao_long$date),
+             melt(as.data.frame(inflacao)))
+
+
+contribuicao_long %>%
+  ggplot(aes(x=date))+
+  geom_col(aes(y=valor, fill= variavel,
+               colour=variavel))+
+  geom_line(data = inflacao,
+            aes(x=contribuicao_long$date,y=value), size=1, colour='red')+
+  geom_hline(yintercept = 0, linetype='dashed') +
+  scale_fill_brewer(type = 'div', palette = 1) +
+  scale_color_brewer(type = 'div', palette = 1) +
+  theme_clean()+
+  theme(legend.position = 'right', axis.text.x = element_text(angle=0), legend.background = element_blank(), legend.title = element_blank())+
+  scale_x_date(labels = date_format("%b"), date_breaks = "1 month") +
+  labs(x='', y='%',
+       title = "Contribuição  dos grupos do IPCA para a variação mensal",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+
+
+```
+
+
+## As classificações do IPCA
+
+Outra forma de ver o movimento da inflação é entender a influência das diferentes classificações do IPCA.
+
+```{r include=FALSE}
+library(BETS)
+
+codes <- c(4447,4448,4449,10841,10842,10843,10844,11428)
+classes <- BETSget(codes, from = '2017-01-01',data.frame = T)
+data <- matrix(NA,nrow = nrow(classes[[1]]), ncol = length(codes))
+for(i in 1:length(codes)){
+  data[,i] = t(classes[[i]]$value)
+}
+
+colnames(data) <- c('Comercializáveis', 'Não comercializáveis',
+                    'Controlados', 'Não-duráveis','Semi-duráveis',
+                    'Duráveis','Serviços','Livres')
+
+data <-
+  data %>%
+  as_tibble()%>%
+  mutate(date= classes[[1]]$date) %>%
+  select(date, everything())
+```
+
+```{r}
+data %>%
+  kable(2)
+```
+
+
+```{r echo=FALSE}
+## plotando
+data %>%
+  filter(date > '2019-12-01') %>%
+  gather(variavel, valor, -date) %>%
+  
+  ggplot(aes(x=date, y=valor, colour = variavel))+
+  geom_line(size=1)+
+  facet_wrap(~variavel, scales = 'free') +
+  theme_clean() +
+theme(legend.position = 'none', axis.text.x = element_text(angle=90), legend.background = element_blank(), legend.title = element_blank())+
+  scale_x_date(labels = date_format("%b"), date_breaks = "1 month") +
+  labs(x='', y='%',
+       title = "Variacao mensal de cada classificação do IPCA",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+```
+
+
+
+
+
+
+```{r include=FALSE}
+# calculando a inflacao acumulada
+
+library(tstools)
+data_12m <-
+  data[,-1] %>%
+  ts(start=c(2017,01), freq=12) %>%
+  acum_p(12)%>%
+  as_tibble() %>%
+  mutate(date=classes[[1]]$date) %>%
+  select(date,everything())%>%
+  drop_na()
+  
+
+```
+
+```{r}
+#inflacao acumulada
+data_12m %>%
+  kable(2)
+```
+
+
+```{r echo=FALSE}
+data_12m %>%
+  filter(date > '2019-12-01') %>%
+  gather(variavel, valor, -date) %>%
+  ggplot(aes(x=date, y=valor, colour=variavel))+
+  geom_line(size=1)+
+  facet_wrap(~variavel, scales='free') +
+   theme_clean() +
+theme(legend.position = 'none', axis.text.x = element_text(angle=90), legend.background = element_blank(), legend.title = element_blank())+
+  scale_x_date(labels = date_format("%b"), date_breaks = "1 month") +
+  labs(x='', y='%',
+       title = "Inflação acumulada em 12 meses de cada classificação do IPCA",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+
+
+## Analisando os núcleos de inflação
+
+Outra variável muito importante na análise da inflação é o comportamento dos núcleos de inflação, pois eles nos informam a dinâmica inflacionária ponderando os efeitos de choque.
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+### Núcleos de Inflação
+
+codes = c(4466,11426,11427,16121,16122, 27838, 27839)
+nucleos = BETSget(codes, from='2012-01-01', data.frame=T)
+data_nucleos = matrix(NA, nrow=nrow(nucleos[[1]]),
+                      ncol=length(codes))
+for(i in 1:length(codes)){
+  data_nucleos[,i] = t(nucleos[[i]]$value)
+}
+
+colnames(data_nucleos) = c('ipca_ms', 'ipca_ma', 'ipca_ex0',
+                           'ipca_ex1', 'ipca_dp', 'ipca_ex2',
+                           'ipca_ex3')
+
+nucleos_vm =
+  data_nucleos %>%
+  as_tibble() %>%
+  mutate(date = nucleos[[1]]$date) %>%
+  select(date, everything())
+
+nucleos_12m = 
+  data_nucleos %>%
+  ts(start=c(2012,01), freq=12) %>%
+  acum_p(12) %>%
+  as_tibble() %>%
+  mutate(date = nucleos[[1]]$date) %>%
+  select(date, everything()) %>%
+  drop_na()
+
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+## plotando os núcleos
+
+nucleos_12m %>%
+  filter(date >'2019-12-01') %>%
+  gather(variavel, valor, -date) %>%
+  ggplot(aes(x=date, y=valor, colour=variavel))+
+  geom_line(size=1) +
+  facet_wrap(~variavel, scales='free')+
+  theme_clean() +
+  theme(legend.position = 'none', axis.text.x = element_text(angle=90), legend.background = element_blank(), legend.title = element_blank())+
+  scale_x_date(labels = date_format("%b"), date_breaks = "1 month") +
+   coord_cartesian(xlim = c(as.Date("2020-01-01"),as.Date("2020-11-01")))+
+  labs(x='', y='%',
+       title = "Inflação acumulada em 12 meses de cada núcleo do IPCA",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+
+```
+
+
+```{r include=FALSE}
+
+### Metas de Inflação
+
+meta = c(rep(4.5,12*7-11), rep(4.25, 12), rep(4, month(Sys.time(),label = F)))
+meta_max = c(rep(4.5+2,12*5-11), rep(4.5+1.5,12*2),
+             rep(4.25+1.5,12), rep(4+1.5, month(Sys.time(),label = F)))
+meta_min = c(rep(4.5-2,12*5-11), rep(4.5-1.5,12*2),
+             rep(4.25-1.5,12), rep(4-1.5, month(Sys.time(),label = F)))
+data_meta = 
+  tibble(date = seq(as.Date('2013-12-01'), Sys.Date(),
+                    by='1 month'),
+         meta_min = meta_min,
+         meta = meta,
+         meta_max = meta_max)
+
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+## Plotanto
+
+
+ filter(ipca, date > '2016-12-01') %>%
+  ggplot(aes(x=date))+
+  geom_line(aes(y=inflacao_anual, colour='IPCA'),
+            size=1.5) +
+  geom_line(data=na.omit(nucleos_12m), 
+            aes(y=rowMeans(nucleos_12m[,-1]),
+                                  colour='Média dos Núcleos'),
+            size=1.5)+
+  geom_ribbon(data=data_meta,
+              aes(ymin=meta_min, ymax=meta_max), 
+              colour='grey70', alpha=0.1, size=1) +
+    geom_line(data=data_meta,
+            aes(y=meta, colour='Meta'), size=1, linetype='dashed' )+
+    scale_colour_manual('',
+                      values=c('IPCA'='#0099ff',
+                               'Média dos Núcleos' = '#00cc66',
+                               'Meta'='red'))+
+  theme_clean()+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  coord_cartesian(xlim = c(as.Date("2018-02-01"),as.Date("2020-11-01")))+
+  theme(axis.text.x = element_text(angle=90), legend.position = 'top', legend.background = element_blank())+
+  labs(x='', y='%', 
+       title='Inflação e as metas do Banco Central ',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+  
+```

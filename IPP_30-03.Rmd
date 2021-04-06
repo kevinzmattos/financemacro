@@ -1,0 +1,560 @@
+---
+title: "IPP - 30/03"
+author: "Observatório Macroeconômico da UFABC Finance"
+date: "27/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(tidyverse)
+library(sidrar)
+library(ggthemes)
+library(scales)
+library(rbcb)
+library(lubridate)
+library(reshape2)
+```
+
+## O que é o IPP
+
+## Alerta
+
+
+
+## Códigos para ler os resultados do mês
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+### Coletando indice ipp
+
+ipp_indice <- get_sidra(api = "/t/6903/n1/all/v/10008/p/all/c842/all/d/v10008%205") %>%
+  mutate(Data = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  select( Data, `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`, Valor)
+
+ipp_indice_wide <- ipp_indice %>%
+    mutate(Valor_2 = (Valor/105.1923)*100)%>%
+  select( Data, `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`, Valor) %>%
+  spread(key = `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`, value = Valor) 
+
+ipp_indice_wide_100 <-ipp_indice %>%
+    mutate(Valor_2 = (Valor/105.1923)*100)%>%
+  select( Data, `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`, Valor_2) %>%
+  spread(key = `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`, value = Valor_2) 
+
+#### Grandes grupos econômicos
+ipp_grandes <- get_sidra(api="/t/6904/n1/all/v/all/p/all/c543/all/d/v1394%202,v1395%202,v1396%202,v10008%205")%>%
+  mutate(Data = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  select(Data, `Grandes categorias econômicas`, Variável, Valor)
+
+
+
+```
+
+```{r}
+### calculando as variações do ipp
+
+ipp_var <-get_sidra(api="/t/6903/n1/all/v/all/p/all/c842/all/d/v1394%202,v1395%202,v1396%202,v10008%205") %>%
+  mutate(Data = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  select(Data,`Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`,Variável, Valor)
+
+
+ipp_var_t <- ipp_var %>%
+  spread(key=Variável, value = Valor) %>%
+  `colnames<-`(c("Data","Setores","Índice","var_acum", "var_men","var_trim"))%>%
+  filter(Setores %in% c("Indústria Geral",
+                        "B Indústrias Extrativas",
+                        "C Indústrias de Transformação"))
+
+ipp_var_12<- ipp_var_t %>%
+  select(Data, Setores, var_men) 
+```
+
+
+```{r}
+## informacoes importantes - variação mensal
+
+ipp_var %>%
+  filter(Data == "2021-02-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)"))) %>%
+  arrange(desc(Valor)) %>%
+  kableExtra::kable(2)
+```
+
+
+
+
+
+```{r}
+### variação em relação ao mes anterior dos ultimos 12 meses
+ ipp_var %>%
+  filter(Data > "2020-01-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)"))) %>%
+  spread(key= Data, value= Valor) %>%
+  arrange(desc(`2021-02-01`))  %>%
+  kableExtra::kable(2)
+```
+
+
+```{r}
+var_heat <- ipp_var %>%
+  filter(Data >= "2020-02-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)"))) %>%
+  spread(key= Data, value= Valor) %>%
+  arrange(desc(`2021-02-01`))  %>%
+  select(-Variável)
+```
+
+
+
+```{r}
+ipp_var %>%
+  filter(Data > "2020-02-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)"))) %>%
+  filter(`Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)` %in%c(
+                        "Indústria Geral",
+                        "B Indústrias Extrativas",
+                        "C Indústrias de Transformação"))%>%
+  ggplot(aes(x=Data,y= Valor, color= `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`))+
+  #geom_line() +
+  geom_col(aes(fill= `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`), position = "dodge")+
+  theme_clean()+
+   
+  theme(legend.position = 'top',
+        legend.title = element_blank(),
+        axis.text.x = element_text(angle=0),
+        legend.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  
+  labs(x='', y='%',
+       title= "Variação do IPP em relação ao mês anterior",
+       subtitle = "",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+
+
+
+
+```{r}
+# variação acumulada no ano corrente
+ipp_var %>%
+  filter(Data == "2021-02-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           #"IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)",
+                           "IPP - Variação mês/mês imediatamente anterior (M/M-1)"))) %>%
+  arrange(desc(Valor)) %>%
+  kableExtra::kable(2)
+```
+
+
+
+
+
+
+```{r}
+## Histórico da inflação corrente
+ipp_var %>%
+  filter(Data >= "2020-02-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           #"IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)",
+                           "IPP - Variação mês/mês imediatamente anterior (M/M-1)"))) %>%
+  spread(key= Data, value = Valor) %>%
+  arrange(desc(`2021-02-01`)) %>%
+  kableExtra::kable(2)
+```
+
+
+
+
+```{r}
+# variação em um ano
+ipp_var %>%
+  filter(Data == "2021-02-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           #"IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)",
+                           "IPP - Variação mês/mês imediatamente anterior (M/M-1)"))) %>%
+  arrange(desc(Valor)) %>%
+  kableExtra::kable(2)
+```
+
+
+
+```{r}
+ipp_var %>%
+ filter(Data >= "2020-01-01") %>%
+  filter(!(Variável %in% c("IPP - Número-índice (dezembro de 2018 = 100)",
+                           #"IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)",
+                           "IPP - Variação mês/mês imediatamente anterior (M/M-1)"))) %>%
+  spread(key= Data, value = Valor) %>%
+  arrange(desc(`2021-02-01`)) %>%
+  kableExtra::kable(2)
+```
+
+
+
+### GRANDES SETORES
+
+```{r}
+# variação acumulada no ano corrente
+ipp_grandes %>%
+  filter(Data == "2021-02-01") %>%
+  filter(!(Variável %in% c(#"IPP - Variação mês/mês imediatamente anterior (M/M-1)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)",
+                           "IPP - Número-índice (dezembro de 2018 = 100)"))) %>%
+  arrange(desc(Valor)) %>%
+  kableExtra::kable(2)
+```
+```{r}
+
+# variacao em relaçao ao ultimo mes
+ipp_grandes %>%
+  filter(Data == "2021-02-01") %>%
+  filter(!(Variável %in% c("IPP - Variação mês/mês imediatamente anterior (M/M-1)",
+                           #"IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           "IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)",
+                           "IPP - Número-índice (dezembro de 2018 = 100)"))) %>%
+  arrange(desc(Valor)) %>%
+  kableExtra::kable(2)
+```
+
+```{r}
+ipp_grandes %>%
+  filter(Data == "2021-02-01") %>%
+  filter(!(Variável %in% c("IPP - Variação mês/mês imediatamente anterior (M/M-1)",
+                           "IPP - Variação mês/mesmo mês do ano anterior (M/M-12)",
+                           #"IPP - Variação acumulada no ano (em relação a dezembro do ano anterior)",
+                           "IPP - Número-índice (dezembro de 2018 = 100)"))) %>%
+  arrange(desc(Valor)) %>%
+  kableExtra::kable(2)
+```
+
+
+
+### Gráficos
+
+
+
+
+```{r}
+### Grafico numero indice
+
+ipp_indice_wide_100 %>%
+  filter(Data > "2019-11-01") %>%
+  ggplot(aes(x=Data, y= `Indústria Geral`))+
+  geom_line(size=1, colour = "#990000") +
+  geom_label( 
+    data= ipp_indice_wide_100 %>% filter(Data == "2021-02-01" | Data == "2021-01-01"), # Filter data first
+    aes(label= round(`Indústria Geral`,1))
+  )+
+  theme_clean()+
+  theme(legend.position = 'none', axis.text.x = element_text(angle=0))+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  labs(x='', y='',
+       title = "Evolução do IPP",
+       subtitle = "2019=100",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+### IPCA
+
+ipca_ind <- get_sidra(api="/t/1737/n1/all/v/2266/p/all/d/v2266%2013") %>%
+  mutate(Data = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  filter(Data > "2019-11-01") %>%
+  mutate(Valor = (Valor/5320.25)*100 ) %>%
+  select(Data, Valor)
+
+ipp <- get_sidra(api = "/t/6903/n1/all/v/10008/p/all/c842/all/d/v10008%205") %>%
+  mutate(Data = parse_date(`Mês (Código)`, format="%Y%m"))
+
+  
+ipp_f <- ipp %>%
+  mutate(Valor_2 = (Valor/105.1923)*100)%>%
+  select( Data, `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`, Valor_2) %>%
+   spread(key = `Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`, value = Valor_2) 
+
+
+### apend
+
+ipp_ipca <-  inner_join(ipp_f,ipca_ind, by="Data") %>%
+  select(Data,`Indústria Geral`, Valor)
+  #pivot_longer(cols = c(`Indústria Geral`, Valor))
+
+
+### Cotação dolar
+
+cambio <- rbcb::get_series(c(USDBRL = 1), last = 311) %>%
+  mutate(Valor = (USDBRL/4.0307
+)*100)
+
+
+cambio %>%
+  ggplot(aes(date, Valor))+
+  geom_line()
+
+
+
+#round dates down to month
+cambio$month <- floor_date(cambio$date, "month")
+
+#find mean sales by week
+
+dias <- seq(as.Date("2020-01-01"),length=14,by="months")-1
+dias
+
+cambio_2 <- cambio %>%
+  group_by(month) %>%
+  arrange(date) %>%  
+  slice(n()) %>%
+  select(month,USDBRL, Valor) %>%
+  `colnames<-`(c("Data","USDBRL","Cambio"))
+  
+
+
+### append
+
+ipp_ipca_cb <- 
+  inner_join(ipp_ipca,cambio_2, by="Data") %>%
+  select(Data,`Indústria Geral`, Valor, Cambio)
+
+
+
+```
+
+```{r echo=FALSE}
+ipp_ipca_cb %>%
+  ggplot(aes(x=Data))+
+  geom_line(aes(y=`Indústria Geral`,colour= "IPP"),size=1) +
+  geom_line(aes(y=Cambio, colour="USDBRL"),size=1)+
+  geom_label( data= ipp_ipca_cb %>% filter(Data == "2021-02-01"), # Filter data first
+    aes(label= round(`Indústria Geral`,1), y=`Indústria Geral`))+
+  theme_clean()+
+  geom_label( data= ipp_ipca_cb %>% filter(Data == "2021-02-01"), # Filter data first
+              aes(label= round(Cambio,1), y=Cambio))+
+  theme_clean()+
+  scale_color_manual('',
+                     values=c(
+                              'IPP' = '#990000',
+                              'USDBRL'="#737373"))+
+   
+  theme(legend.position = 'top', axis.text.x = element_text(angle=0),
+        legend.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  
+  labs(x='', y='',
+       title= "IPP e a cotação do Dólar",
+       subtitle = "Dezembro 2019 = 100",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+```{r}
+cor(ipp_ipca_cb$`Indústria Geral`, ipp_ipca_cb$Cambio)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+### IPCA
+ipca_ind <- get_sidra(api="/t/1737/n1/all/v/2266/p/all/d/v2266%2013") %>%
+  mutate(Data = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  filter(Data > "2019-11-01") %>%
+  mutate(Valor = (Valor/5320.25)*100 ) %>%
+  select(Data, Valor)
+
+
+
+
+
+
+
+### apend
+
+ipp_ipca <- 
+  inner_join(ipp_f,ipca_ind, by="Data") %>%
+  select(Data,`Indústria Geral`, Valor)
+  #pivot_longer(cols = c(`Indústria Geral`, Valor))
+
+
+
+```
+
+
+
+
+```{r echo=FALSE}
+
+ipp_ipca %>%
+  ggplot(aes(x=Data))+
+  geom_line(aes(y=Valor,colour = "IPCA"), size=1)+
+  geom_line(aes(y=`Indústria Geral`,colour= "IPP"),  size = 1)+
+  geom_label( data= ipp_ipca %>% filter(Data == "2021-02-01"), # Filter data first
+    aes(label= round(`Indústria Geral`,1), y=`Indústria Geral`))+
+  theme_clean()+
+  scale_color_manual('',
+                     values=c(
+                              'IPP' = '#990000',
+                              'IPCA'="#737373"))+
+  geom_label( data= ipp_ipca %>% filter(Data == "2021-02-01"), # Filter data first
+              aes(label= round(Valor,1), y=Valor))+
+  theme_clean()+
+  
+  theme(legend.position = 'top', axis.text.x = element_text(angle=90),
+        legend.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  labs(x='', y='', 
+       title = "IPP e IPCA",
+       subtitle = "2019 = 100",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+```
+```{r include=FALSE}
+#### commodities
+
+com <- rbcb::get_series(c("valor"=27574), last=15) %>%
+  mutate(indice = (valor/205.54)*100) %>%
+  select(date, indice) %>%
+  `colnames<-`(c("Data","Indice"))
+
+
+### append
+
+df_comp <- ipp_ipca_cb %>%
+  inner_join(com, by= "Data" )
+
+
+
+```
+
+
+```{r echo=FALSE}
+## plotando 4 linhas ####
+df_comp %>%
+  ggplot(aes(x=Data))+
+  geom_line(aes(y=Valor, colour = "IPCA"), size=1.2)+
+  geom_line(aes(y=`Indústria Geral`,colour= "IPP"),size=1.2) +
+  geom_line(aes(y=Cambio, colour="USDBRL"),size=1.2)+
+  geom_line(aes(y=Indice, colour="Commodities"),size=1.2)+
+  theme_clean()+
+  scale_color_manual('',
+                     values=c('IPCA'='#0099ff',
+                              'IPP' = '#00cc66',
+                              'USDBRL'='red',
+                              "Commodities" = "orange"))+
+  
+  theme(legend.position = 'top', axis.text.x = element_text(angle=0),
+        legend.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  
+  labs(x='', y='',
+       title= "Comparação entre Índices de preços, Commodities e Dólar",
+       subtitle = "Dezembro 2019 = 100",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+
+```{r}
+
+#### dando um gather
+colnames(df_comp) <- c("Data",'IPP','IPCA',
+                         'USDBRL', "Commodities")
+
+df_longer <- df_comp %>%
+  pivot_longer(c(IPP,IPCA,USDBRL,Commodities))
+
+
+
+df_longer %>%
+  transform(name = factor(name, levels = c('IPP','IPCA',
+                                           'USDBRL', "Commodities"))) %>%
+  ggplot(aes(x=Data, y=value,colour=name))+
+  geom_line(size=1.2)+
+  theme_clean()+
+  facet_wrap(~name, scales= "free")+
+  theme(legend.position = 'none', axis.text.x = element_text(angle=90), legend.background = element_blank(), legend.title = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  labs(x='', y='',
+       title= "Comparação entre Índices de preços, Commodities e Dólar",
+       subtitle = "Dezembro 2019 = 100",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+
+```{r}
+### calculando as variações
+
+ipp_var <-get_sidra(api="/t/6903/n1/all/v/all/p/all/c842/all/d/v1394%202,v1395%202,v1396%202,v10008%205") %>%
+  mutate(Data = parse_date(`Mês (Código)`, format="%Y%m")) %>%
+  select(Data,`Indústria geral, indústrias extrativas e indústrias de transformação e atividades (CNAE 2.0)`,Variável, Valor)
+
+
+ipp_var_t <- ipp_var %>%
+  spread(key=Variável, value = Valor) %>%
+  `colnames<-`(c("Data","Setores","Índice","var_acum", "var_men","var_trim"))%>%
+  filter(Setores %in% c("Indústria Geral","B Indústrias Extrativas","C Indústrias de Transformação"))
+
+ipp_var_12<- ipp_var_t %>%
+  select(Data, Setores, var_men) 
+```
+
+```{r}
+
+ipp_var_12 %>%
+  filter(Data > "2019-12-01" & Data < "2021-01-01") %>%
+  ggplot(aes(x=Data, fill=Setores))+
+  geom_col(aes(y=var_men)) +
+  facet_wrap(~Setores, scales="free") +
+  theme_clean()+
+  theme(legend.position = 'none', axis.text.x = element_text(angle=90), legend.background = element_blank(), legend.title = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  labs(x='', y='%',
+       title= "Varição mensal do IPP ",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+```
+
+```{r}
+ipp_var_12_long <- ipp_var_12 %>%
+  spread(key= Setores, value = var_men) %>%
+  `colnames<-`(c("Data","Indústrias Extrativas","Indústrias de Transformação","Indústria Geral"))
+
+ipp_var_12 %>%
+  filter(Data >"2019-12-01")%>%
+  ggplot(aes(x=Data, y= var_men, fill= Setores))+
+  geom_col(position = "dodge")+
+  #geom_col(aes(y=`Indústria Geral`,fill= "Indústria Geral"), size=1.2)+
+  #geom_col(aes(y=`Indústrias Extrativas`,fill = "Indústrias Extrativas"),size=1.1) +
+  #geom_col(aes(y=`Indústrias de Transformação`, fill="Indústrias de Transformação"),size=1.1)+
+  theme_clean()+
+  scale_color_manual('',
+                     values=c('Indústria Geral' = 'grey',
+                              'Indústrias Extrativas'='#990000',
+                              "Indústrias de Transformação" = "orange"))+
+  
+  theme(legend.position = 'bottom', axis.text.x = element_text(angle=0),
+        legend.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  
+  labs(x='', y='%',
+       title= "Variação acumulada em 12 meses do IPP",
+       #subtitle = "Dezembro 2019 = 100",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+```
+
+
