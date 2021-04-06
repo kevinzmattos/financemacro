@@ -1,0 +1,148 @@
+---
+title: "Modelo - Política Fiscal"
+author: "Finance Macro"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    includes:
+      in_header: header.tex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sidrar)
+library(tidyverse)
+library(tstools)
+library(BETS)
+library(ggthemes)
+library(scales)
+library(lubridate)
+library(timetk)
+library(knitr)
+library(seasonal)
+library(zoo)
+library(kableExtra)
+```
+
+\clearpage
+
+# Contas Nacionais
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+## importando a tabela resumo das contas nacionais
+
+get_sidra(api='/t/2072/n1/all/v/all/p/last%201') %>%
+  select(Variável, `Unidade de Medida`, Valor) %>%
+  kbl(row.names = F, booktabs = T, align = 'l') %>%
+  kable_classic(full_width= F,)
+  
+
+```
+
+
+
+## Déficit primário 
+## Déficit nominal
+
+## Taxa de popupança
+
+```{r include=FALSE}
+## coletando e tratando os dados de taxa de poupança
+
+tax_poup <- get_sidra(api = '/t/6726/n1/all/v/all/p/all/d/v9774%201') %>%
+   mutate(date = as.yearqtr(`Trimestre (Código)`, format="%Y%q"))%>%
+  select(date, Valor) %>%
+  as_tibble()
+
+tax_inv <-  get_sidra(api = '/t/6727/n1/all/v/all/p/last%2083/d/v2517%201') %>%
+   mutate(date = as.yearqtr(`Trimestre (Código)`, format="%Y%q"))%>%
+  select(date, Valor) %>%
+  as_tibble()
+
+df_inv_poup <- inner_join(tax_poup, tax_inv, by= 'date')
+  colnames(df_inv_poup) <- c('date','Taxa de poupança', 'Taxa de investimento')
+  
+```
+
+```{r echo=FALSE}
+## plotando
+
+df_inv_poup %>%
+  filter(date > '2010 Q1') %>%
+  select(`Taxa de investimento`, date)%>%
+  gather(variavel, valor, -date) %>%
+  ggplot(aes(x=date, y=valor, colour=variavel))+
+  geom_line(size=1)+
+  facet_wrap(~variavel, scales='free') +
+  theme_clean()+
+  theme(legend.position = 'none')+
+  scale_x_yearqtr(breaks = pretty_breaks(n=6),
+                  format = '%YQ%q')+
+  labs(x='', y='%', 
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+  
+```
+
+
+
+## Dívida pública
+
+
+
+```{r include=FALSE}
+
+## coletando os dados da dívida bruta
+
+library(BETS)
+codes <- c(13762,4536) 
+dados <- BETSget(code = codes, from = "2010-01-01", data.frame = T) 
+div_df <- matrix(NA,nrow = nrow(dados[[1]]), ncol = length(codes))
+for(i in 1:length(codes)){
+  div_df[,i] = t(dados[[i]]$value)
+}
+
+colnames(div_df) <- c('Dívida bruta','Dívida líquida')
+
+div_df <- div_df %>%
+  as_tibble() %>%
+  mutate(date= dados[[1]]$date) %>%
+  select(date, everything())
+  
+```
+
+
+```{r echo=FALSE}
+## plotando
+
+div_df %>%
+  filter(date > '2017-12-01') %>%
+  gather(variavel, value, -date) %>%
+  ggplot(aes(x=date, y= value, colour= variavel))+
+  geom_line(size=1) +
+  geom_ribbon(aes(xmin = as.Date('2020-01-01'), xmax=as.Date('2021-01-01')), alpha=0.2, fill='grey', color='grey')+
+  facet_wrap(~variavel, scales='free')+
+  
+  #geom_ribbon(aes(xmin = as.Date('2020-03-01'), xmax=as.Date('2020-12-01')), alpha=0.1, fill='red')+
+  #annotate('text', x= as.Date('2020-08-01'), y = 81, label = 'COVID-19', parse=T)+
+  theme_clean() +
+  theme(legend.position = 'none', axis.text.x = element_text(angle=90))+
+  scale_x_date(labels = date_format('%b/%Y'), date_breaks = "3 month") +
+  coord_cartesian(xlim = c(as.Date("2017-12-01"),as.Date("2021-01-01")))+
+  labs(x='', y='% do PIB',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+```
+
+\clearpage
+
+# Reformas
+
+Esta é uma seção especial, será escolhida apenas uma reforma por publicação, que será trimestral.
+
+
+
+
