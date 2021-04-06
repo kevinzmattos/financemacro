@@ -1,0 +1,311 @@
+---
+title: "Modelo - Grupo de Atividade econômica"
+author: "Finance Macro"
+output:
+  pdf_document:
+    toc: yes
+    number_sections: yes
+    includes:
+      in_header: header.tex
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(sidrar)
+library(zoo)
+library(tstools)
+library(ggthemes)
+library(scales)
+library(knitr)
+```
+
+#  PIB
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+### Coletar Numeros indices do PIB dessazonalizads
+
+pib_sa <- 
+  get_sidra(api = '/t/1621/n1/all/v/all/p/all/c11255/90707/d/v584%202') %>%
+  mutate(date = as.yearqtr(`Trimestre (Código)`, format="%Y%q"))%>%
+  rename(pib_sa = Valor) %>%
+  mutate(var_marginal = (pib_sa/lag(pib_sa,1)-1)*100) %>%
+  select(date, pib_sa, var_marginal) %>%
+  as_tibble()
+
+
+```
+
+## Variação trimestral
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#plotando
+
+pib_sa %>%
+  filter(date >= '2019 Q1') %>%
+  ggplot(aes(x=date, y=var_marginal))+
+  geom_col(fill='#990000')+
+  geom_label(aes(x=date,label= round(var_marginal,1), y = var_marginal), size=3.5)+
+  #geom_line(colour='red') +
+  #geom_hline(yintercept = 0, lintetype='dashed')+
+  theme_clean() +
+  theme(axis.text.x = element_text(angle=0), legend.background = element_blank(), legend.title = element_blank())+
+  scale_x_yearqtr( breaks = pretty_breaks(n=6),
+                  format = '%YQ%q')+
+  labs(x='', y='%',
+       title = "Variação trimestral do PIB com ajuste sazonal",
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+
+
+  
+```
+ 
+```{r include=FALSE}
+## pib sem dessazonalização
+
+pib <-
+  get_sidra(api='/t/1620/n1/all/v/all/p/all/c11255/90707/d/v583%202') %>%
+  mutate(date = as.yearqtr(`Trimestre (Código)`, format="%Y%q"))%>%
+  rename(pib = Valor) %>%
+  mutate(var_interanual = (pib/lag(pib,4)-1)*100,
+         var_anual = acum_i(pib,4)) %>%
+  select(date, pib, var_interanual, var_anual) %>%
+  as_tibble()
+  
+```
+ 
+```{r echo=FALSE}
+## plotando
+
+
+pib %>%
+  filter(date >= '2013 Q1') %>%
+  ggplot(aes(x=date, y= pib))+
+  geom_line(colour='red', size=1) +
+  theme_clean() +
+  labs(x='', y='', 
+       title = 'Evolução do PIB',
+       subtitle = 'Base: 1995=100',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')+
+  theme(legend.position = 'none')+
+  scale_x_yearqtr(breaks = pretty_breaks(n=6),
+                  format = '%YQ%q')
+```
+ 
+```{r include=FALSE}
+## juntando os dados
+
+df_pib <-
+  inner_join(pib_sa,pib, by='date') %>%
+  drop_na()
+colnames(df_pib) <- c('date', 'pib_sa',
+                    'Variação marginal', 'pib','Variação do PIB em relação ao mesmo trimestre ',
+                    'Variação acumulada em 12 meses')
+
+## de wide para long
+
+df_long_pib <- df_pib %>%
+  gather(variavel, valor, -date)
+```
+ 
+ 
+```{r echo=FALSE, fig.height=4, fig.width=10}
+## plotando
+df_long_pib %>%
+  filter(variavel != 'pib', variavel != 'pib_sa', variavel != 'Variação marginal', date >= '2018 Q1') %>%
+  
+  ggplot(aes(x=date, y=valor))+
+  #geom_line(size=1, colour='#990000')+
+  geom_col(fill= '#990000', color='grey')+
+  theme_clean()+
+  geom_label(aes(x=date,label= round(valor,1)), size=3)+
+
+  #geom_hline(yintercept = 0, linetype='dashed')+
+  facet_wrap(~variavel, scales = 'free')+
+  theme(legend.position = 'none')+
+  scale_x_yearqtr(breaks = pretty_breaks(n=4),
+                  format = '%YQ%q')+
+  labs(x='', y='%', 
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+```
+ 
+## Olhando o lado da oferta do PIB
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+pib_of <- get_sidra(api='/t/5932/n1/all/v/6562/p/all/c11255/90687,90691,90696,90707/d/v6562%201') %>%
+  mutate(date = as.yearqtr(`Trimestre (Código)`, format="%Y%q")) %>%
+  as_tibble() %>%
+  select(date, `Setores e subsetores`, Valor)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+pib_of %>%
+  filter(date >= "2013 Q1") %>%
+  ggplot(aes(x=date, y=Valor, colour = `Setores e subsetores`)) +
+  geom_line(size=1)+
+  facet_wrap(~`Setores e subsetores`, scales = 'free') +
+  geom_hline(yintercept = 0, linetype='dashed')+
+  theme_clean()+
+   theme(legend.position = 'none')+
+  scale_x_yearqtr(breaks = pretty_breaks(n=4),
+                  format = '%YQ%q')+
+  labs(x='', y='%',
+       title = 'Variação acumulada em quatro trimestres do PIB',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+pib_of_2 <- get_sidra(api='/t/5932/n1/all/v/6561/p/all/c11255/90687,90691,90696,90707/d/v6561%201') %>%
+  mutate(date = as.yearqtr(`Trimestre (Código)`, format="%Y%q")) %>%
+  as_tibble() %>%
+  select(date, `Setores e subsetores`, Valor)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+pib_of_2 %>%
+  filter(date >= "2019 Q1") %>%
+  ggplot(aes(x=date, y=Valor, colour = `Setores e subsetores`)) +
+  geom_col(colour='#990000', fill='#990000')+
+  
+  facet_wrap(~`Setores e subsetores`, scales = 'free') +
+  geom_hline(yintercept = 0)+
+  theme_clean()+
+   theme(legend.position = 'none')+
+  scale_x_yearqtr(breaks = pretty_breaks(n=6),
+                  format = '%YQ%q')+
+  labs(x='', y='%',
+       title = 'Taxa trimestral em relação ao mesmo trimestre do ano anterior',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+```
+
+
+
+
+# IBC-br
+
+
+
+# Mercado de Trabalho
+
+Outro aspecto importante a ser analisado é como está a dinâmica do mercado de trabalho
+
+
+## Massa de rendimentos
+
+```{r}
+massa <- get_sidra(api = "/t/6393/n1/all/v/6295,6296,8931/p/all/d/v6296%201,v8931%201") %>%
+   mutate(Data = as.yearmon(`Trimestre Móvel (Código)`, format="%Y%m")) %>%
+  as_tibble() %>%
+  select(Variável,Valor, Data) %>%
+  spread(key = Variável, value= Valor) %>% `colnames<-`(c("Data", "Coeficiente","Massa","Variação"))
+```
+```{r}
+massa %>% filter( Data > 2018) %>%
+  ggplot(aes(Data, Massa))+
+  geom_col() +
+  theme_minimal()
+```
+
+## Rendimento médio 
+ 
+```{r}
+rend_med <- get_sidra(api="/t/6387/n1/all/v/5935,8854/p/all/d/v8854%201") %>%
+  mutate(Data = as.yearmon(`Trimestre Móvel (Código)`, format="%Y%m")) %>%
+  as_tibble() %>%
+  select(Variável,Valor, Data) %>%
+  spread(key = Variável, value= Valor) %>%
+  `colnames<-`(c("Data", "Rendimento médio", "Variação"))%>%
+  mutate(pos= Variação > 0 )
+```
+ 
+```{r}
+rend_med %>%
+  filter(Data > 2019)%>%
+  ggplot(aes(x=Data, y = Variação, fill=pos))+
+  geom_col( colour = "black") +
+  scale_fill_manual(values = c( "#990000","grey"), guide = FALSE)+
+  geom_text(aes(label = round(Variação,1)), vjust = "top", hjust = "center")+
+  theme_classic()+
+  labs(x='', y='%',
+       title = 'Variação do saldo CAGED',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+```
+
+# tempo de procura por emprego
+
+
+```{r}
+## Pacotes utilizados nesse comentário
+library(tidyverse)
+library(zoo)
+ 
+table = get_sidra(api='/t/1616/n1/all/v/4092/p/all/c1965/all') %>%
+mutate(date = as.yearqtr(`Trimestre (Código)`, format='%Y%q')) %>%
+select( #everything()) %>% 
+  date, "Tempo de procura de trabalho", Valor) %>%
+as_tibble()
+```
+ 
+```{r}
+table %>%
+  filter(date >"2015Q4") %>%
+  ggplot(aes(x= date, y = Valor, colour = `Tempo de procura de trabalho`))+
+  geom_line()+
+  facet_wrap(~`Tempo de procura de trabalho`, scales= "free") +
+  theme_clean()+
+   theme(legend.position = 'none')+
+  scale_x_yearqtr(breaks = pretty_breaks(n=2),
+                  format = '%YQ%q')+
+  labs(x='', y='Milhares de pessoas',
+       title = 'Desemprego ao longo do tempo no Brasil',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+  
+```
+#Baixar planilha CAGED #########################
+
+```{r}
+########################################################
+######## Baixar planilha CAGED #########################
+ 
+library(readxl)
+library(tidyverse)
+ 
+url = 'http://pdet.mte.gov.br/images/Novo_CAGED/Fev2021/3-tabelas.xlsx'
+download.file(url, destfile='caged.xlsx', mode='wb')
+data = read_excel('caged.xlsx', sheet = 'Tabela 5.1',
+range="B5:G18") %>%
+mutate(`Mês` = parse_date(`Mês`, format='%B/%Y', locale=locale('pt')))
+
+data <- data %>%
+  mutate(pos = Saldos > 0)%>%
+  mutate(Saldo = Saldos/1000)
+```
+
+```{r}
+data %>%
+  ggplot(aes(x=Mês, y=Saldo, fill=pos))+
+  geom_col(colour= "black") +
+  geom_text(aes(label= round(Saldo)),vjust = "top", hjust = "center")+
+  scale_fill_manual(values = c("#990000", "grey"), guide = FALSE) +
+  theme_clean() +
+  theme(legend.position = 'none', axis.text.x = element_text(angle=90),
+        legend.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month",
+               limits = c(as.Date("2020-01-01"), as.Date("2021-03-01"))) +
+  labs(x='', y='Milhares de pessoas',
+       title = 'Saldo do CAGED',
+       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+  
+  
+```
+
