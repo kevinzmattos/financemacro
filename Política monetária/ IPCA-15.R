@@ -10,7 +10,7 @@ library(tstools)
 ## coletando os dados e tratando
 
 teste <- get_sidra(api = '/t/3065/n1/all/v/1117/p/all/d/v1117%2013') %>%
-  mutate( date = parse_date(`Mês (Código)`, format = '%Y%m')) %>%
+  mutate( date = parse_date(`MÃªs (CÃ³digo)`, format = '%Y%m')) %>%
   rename( indice = Valor) %>%
   mutate(inflacao_mensal = (indice/lag(indice, 1)-1)*100,
          inflacao_anual = (indice/lag(indice,12)-1)*100,
@@ -20,7 +20,7 @@ teste <- get_sidra(api = '/t/3065/n1/all/v/1117/p/all/d/v1117%2013') %>%
 
 
 
-### Metas de Inflação
+### Metas de InflaÃ§Ã£o
 
 meta = c(rep(4.5,12*7-11), rep(4.25, 12), rep(4, 12))
 meta_max = c(rep(4.5+2,12*5-11), rep(4.5+1.5,12*2),
@@ -56,7 +56,7 @@ teste %>%
         plot.title = element_text(hjust = 0.5))+
   labs(x='', y='%', 
        title='IPCA-15 ',
-       caption='Fonte: IBGE - Elaboração: UFABC Finance')
+       caption='Fonte: IBGE - ElaboraÃ§Ã£o: UFABC Finance')
 
   
 
