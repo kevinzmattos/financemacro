@@ -1,0 +1,345 @@
+---
+title: "texto_0106"
+author: "Kevin Zavala Mattos"
+date: "01/06/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+## LIBRARIES
+
+library(tidyverse)
+library(readxl)
+library(ggthemes)
+library(scales)
+```
+
+```{r}
+
+# Gráfico 1 - variação anual do PIB para um grupo seleto
+
+gdp_raw <- read_xlsx("WEOApr2021all.xlsx")
+
+# excel do "World Economic Outlook" que está no diretório
+
+head(gdp_raw)
+
+paises <- c("Argentina","Brazil", "Chile",
+            "Colombia", "Mexico", "Peru")
+
+
+gdp_clean <- gdp_raw %>%
+  filter(Country %in% paises & `WEO Subject Code` == "NGDP_RPCH") %>% # deixa somente os países da lista, assim como só os dados da mudança perc. do PIB
+  select(Country, "2020") 
+
+gdp_clean$`2020` <- as.numeric(gdp_clean$`2020`)
+
+gdp_clean[1,2] <- gdp_clean[1,2]/1000
+gdp_clean[2,2] <- gdp_clean[2,2]/1000
+gdp_clean[3,2] <- gdp_clean[3,2]/1000
+gdp_clean[4,2] <- gdp_clean[4,2]/1000
+gdp_clean[5,2] <- gdp_clean[5,2]/1000
+gdp_clean[6,2] <- gdp_clean[6,2]/1000
+
+
+
+## transformar em fatores para reorganizar
+
+gdp_clean$Country <- c("Argentina", "Brasil", "Chile",
+            "Colômbia","México", "Peru")
+
+gdp_clean$Country <- reorder(gdp_clean$Country, gdp_clean$`2020`)
+
+gdp_clean <- gdp_clean %>%
+  arrange(`2020`) 
+```
+
+
+```{r}
+
+### Gráfico 1
+
+gdp_clean %>%
+  ggplot(aes(x= Country, y= `2020`,
+             fill = factor(ifelse(Country == "Brasil", "high","none")))) +
+  geom_col(show.legend = F, alpha = 1) +
+  geom_text(aes(label=  percent(gdp_clean$`2020`,scale=1,accuracy = 0.1), hjust = "left", vjust = "center"),size=4)+
+ #geom_label(aes(x=Country,label= `2020`), size=3.5)+
+  scale_fill_manual(name= "Country", values = c('#696969', '#990000'))+
+  coord_flip()+
+  theme_clean() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.background = element_blank())+
+  labs(x='', y='',
+       title = "Variação do PIB em 2020",
+       subtitle = "Comparação entre os países mais populosos da América Latina em 2020",
+       caption='Fonte: FMI. Elaboração: UFABC Finance Macro')
+```
+
+
+```{r}
+## Gráfico 2
+
+
+covid_raw <- read_excel("covid-response.xlsx", sheet = "dados", skip =1)
+
+
+covid_clean <- covid_raw %>%
+  filter(country %in% paises) %>%
+  select(country, Add_spending) %>%
+  arrange(Add_spending)
+
+
+
+## transformar em fatores para reorganizar
+
+covid_clean$country <- c("México","Argentina", "Colômbia", "Peru","Chile",
+                        "Brasil")
+
+covid_clean$Add_spending <- as.numeric(covid_clean$Add_spending)
+
+covid_clean$country <- reorder(covid_clean$country, -covid_clean$Add_spending)
+
+
+
+
+covid_clean %>%
+  ggplot(aes(x=country, y =Add_spending,
+             fill = factor(ifelse(country == "Brasil", "high","none")))) +
+  geom_col(show.legend = F, alpha = 1) +
+  geom_text(aes(label=  percent(covid_clean$Add_spending ,scale=1,accuracy = 0.1), hjust = "right", vjust = "center"),size=4)+
+  #geom_label(aes(x=Country,label= `2020`), size=3.5)+
+  scale_fill_manual(name= "country", values = c('#696969', '#990000'))+
+  coord_flip()+
+  theme_clean() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.background = element_blank())+
+  labs(x='', y='',
+       title = "Esforço fiscal para combater o COVID-19 em 2020",
+       subtitle = "Em porcentagem do PIB de 2020",
+       caption='Fonte: FMI. Elaboração: UFABC Finance Macro')
+
+```
+
+
+
+```{r}
+# Gráfico 3 - variação da dívida pública
+
+
+debt_raw <- read_xlsx("WEOApr2021all.xlsx")
+
+
+
+paises <- c("Argentina","Brazil", "Chile",
+            "Colombia", "Mexico", "Peru")
+
+
+debt_clean <- debt_raw %>%
+  filter(Country %in% paises & `WEO Subject Code` == "GGXWDG_NGDP" ) %>% # deixa somente os países da lista, assim como só os dados da mudança perc. do PIB
+  select(Country, "2020","2019") 
+
+
+## trasformando em numerico
+debt_clean$`2020` <- as.numeric(debt_clean$`2020`)
+debt_clean$`2019` <- as.numeric(debt_clean$`2019`)
+
+debt_clean <- debt_clean %>%
+  mutate("2020" = (`2020`/1000),
+         "2019" = (`2019`/1000),
+         change = `2020`-`2019`)
+
+
+
+## transformar em fatores para reorganizar
+
+debt_clean$Country <- c("Argentina", "Brasil", "Chile",
+                       "Colômbia","México", "Peru")
+
+debt_clean$Country <- reorder(debt_clean$Country, debt_clean$change)
+
+debt_clean <- debt_clean %>%
+  arrange(change) 
+
+
+#### deixado a tabela no formato nao tidy para plotat
+
+debt_clean_l <- debt_clean %>%
+  select(Country, `2019`,`2020`) %>%
+pivot_longer(cols = c("2019","2020"))
+
+debt_clean_l$Country <- reorder(debt_clean_l$Country, debt_clean_l$value)
+
+debt_clean_l <- debt_clean_l %>%
+  arrange(value) 
+
+
+## grafico
+
+debt_clean_l %>%
+  ggplot(aes(x=Country, y = value, fill=name)) +
+  geom_col(position = "dodge", show.legend = T, alpha = 1) +
+  geom_text(aes(label=  percent(debt_clean_l$value ,scale=1,accuracy = 0.1), hjust = "center",vjust= -0.3),size=4,
+            position = position_dodge(width = 1))+
+  #geom_label(aes(x=Country,label= `2020`), size=3.5)+
+  scale_fill_manual(name= "Ano", values = c('#696969', '#990000'))+
+  #coord_flip()+
+  theme_clean() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.background = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        plot.background = element_blank())+
+  ylim(0,105)+
+  labs(x='', y='',
+       title = "Relação dívida PIB",
+       subtitle = "Comparação entre os países mais populosos da América Latina em 2020",
+       caption='Fonte: FMI. Elaboração: UFABC Finance Macro')
+```
+
+
+```{r}
+# GRÁFICO 4 - RELAÇÃO DÍVIDA PÚBLICA/PIB
+
+
+# rordenando em ordem crescente
+debt_clean$Country <- reorder(debt_clean$Country, debt_clean$`2020`)
+
+debt_clean <- debt_clean %>%
+  arrange(`2020`) 
+
+
+debt_clean %>%
+  ggplot(aes(x= Country, y= `2020`,
+             fill = factor(ifelse(Country == "Brasil", "high","none")))) +
+  geom_col(show.legend = F, alpha = 1) +
+  geom_text(aes(label=  percent(debt_clean$`2020`,scale=1,accuracy = 0.1), hjust = "right", vjust = "center"),size=4)+
+  #geom_label(aes(x=Country,label= `2020`), size=3.5)+
+  scale_fill_manual(name= "Country", values = c('#696969', '#990000'))+
+  coord_flip()+
+  theme_clean() +
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.background = element_blank())+
+  labs(x='', y='',
+       title = "Relação dívida PIB em 2020",
+       subtitle = "Comparação entre os países mais populosos da América Latina em 2020",
+       caption='Fonte: FMI. Elaboração: UFABC Finance Macro')
+
+```
+
+
+
+```{r}
+  # Gráfico 5
+
+selic <- read_excel("graf_texto_1.xlsx")
+
+selic_long <- pivot_longer(selic, cols = c(`2020`, `2021`,`2022`,`2023`,`2024`))
+
+
+
+selic_long %>%
+  ggplot(aes(x=as.numeric(name), y=value))+
+  geom_line(color = "#990000", size =1) +
+  geom_label(aes(label=  percent(selic_long$value ,scale=1,accuracy = 0.1), hjust = "center", vjust = "center"),size=4)+
+  theme_clean() +
+  theme(plot.background = element_blank())+
+  ylim(2, 7) +
+  labs(x='', y='',
+       title = "Selic – Fim do período (%a.a)",
+       subtitle = "Projeção feita pelo Instituto Fiscal Independente (IFI).",
+       caption='Fonte: IFI. Adaptação: UFABC Finance Macro')
+
+```
+
+
+
+```{r}
+
+## Gráfico 6 - Arrecadação líquida em diferentes cenários
+
+arrec_liq <- read_excel("graf_texto_1.xlsx", sheet = 2)
+
+arrec_liq_long <- arrec_liq %>%
+  pivot_longer(c(`2020`,`2021`,`2022`,`2023`,`2024`))
+
+
+arrec_liq_long %>%
+  ggplot(aes(x= as.numeric(name),y=value,
+             color = Cenário))+
+  geom_line( size = 1.2)+
+  theme_clean()+
+  ylim(16,18) +
+  scale_color_manual(values = c('#990000','#696969', "black"))+
+  theme(axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.background = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        plot.background = element_blank())+
+  labs(x='', y='',
+       title = "Arrecadação líquida em diferentes cenários (% do PIB)",
+       subtitle = "Projeção feita pelo Instituto Fiscal Independente (IFI).",
+       caption='Fonte: IFI. Adaptação: UFABC Finance Macro')
+```
+
+```{r}
+## Gráfico 7 - Dívida Bruta do governo
+
+debt_ifi <- read_excel("graf_texto_1.xlsx", sheet = 3)
+
+debt_ifi_long <-debt_ifi %>%
+  pivot_longer(cols = c(`2020`,`2021`,`2022`,`2023`,`2024`))
+
+
+debt_ifi_long %>%
+  ggplot(aes(x=as.numeric(name),y= value))+
+  geom_line(color = "#990000", size =1) +
+  theme_clean() +
+  ylim(88,100) +
+  labs(x='', y='',
+       title = "Dívida bruta do governo federal (% do PIB)*",
+       subtitle = "Projeção feita pelo Instituto Fiscal Independente (IFI).",
+       caption='* O valor difere das projeções do FMI que utiliza uma metodologia para comparações internacioanais, pois o IFI utiliza a metodologia do BCB. 
+Fonte: IFI. Adaptação: UFABC Finance Macro.')
+
+
+```
+
+
+```{r}
+
+
+# Gráfico 8 -- PIB crescimento real
+
+pib_ifi <- debt_ifi <- read_excel("graf_texto_1.xlsx", sheet = 4)
+
+
+pib_ifi_long <-debt_ifi %>%
+  pivot_longer(cols = c(`2020`,`2021`,`2022`,`2023`,`2024`))
+
+
+pib_ifi_long %>%
+  ggplot(aes(x=as.numeric(name),y= value))+
+ geom_col(fill='#990000') +
+  geom_label(aes(label=  percent(pib_ifi_long$value,scale=1,accuracy = 0.1), hjust = "center", vjust = "center"),size=4)+
+  theme_clean() +
+  
+  ylim(-5,5)+
+  #scale_y_continuous(breaks=c(-5,-2.5,0,2.5,5))+
+  labs(x='', y='',
+       title = "PIB – Crescimento real (% a.a)*",
+       subtitle = "Projeção feita pelo Instituto Fiscal Independente (IFI).",
+       caption='Fonte: IFI. Adaptação: UFABC Finance Macro.')
+
+```
+
