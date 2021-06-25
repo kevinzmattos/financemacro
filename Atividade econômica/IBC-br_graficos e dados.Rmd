@@ -1,0 +1,94 @@
+---
+title: "IBC-br"
+author: "Kevin Zavala Mattos"
+date: "20/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Biblioteca
+
+library(tidyverse)
+library(scales)
+library(Quandl)
+library(BETS)
+library(tstools)
+library(knitr)
+library(ggthemes)
+
+## paleta de cores
+palette <- c('#990000',
+             "#AE1706",
+             "#DB1D08",
+             "#F73019",
+             "#F85846",
+              "#607D86",
+             "#53565a",
+             "#bfcad0",
+             "#CBCDCB")
+
+```
+
+
+```{r}
+## Coleta
+ibc <- BETSget(24363, data.frame=TRUE)
+ibc_saz <- BETSget(24364, data.frame=TRUE)
+```
+
+```{r}
+## tratamento
+
+ibc_df <- inner_join(ibc,ibc_saz, by = "date") %>%
+  as_tibble() %>%
+  rename(ibc = value.x, ibc_saz = value.y) %>%
+  mutate(margem = (ibc_saz/lag(ibc_saz,1)-1)*100) %>%
+  mutate(interanual = (ibc/lag(ibc,12)-1)*100) %>%
+  mutate(trimestral = acum_i(ibc_saz,3)) %>%
+  mutate(anual = acum_i(ibc, 12))
+```
+
+
+```{r}
+## Gráfico 1. Variação mensal dos ultimos 12 meses
+
+tail(ibc_df,12) %>%
+  ggplot(aes(x=date, y = margem))+
+  geom_col(fill='#990000') +
+  geom_label(aes(x=date,label= round(margem,2), y = margem), size=3.5)+
+  theme_clean() +
+  theme(axis.text.x = element_text(angle=0), legend.background = element_blank(), legend.title = element_blank(),
+        plot.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), date_breaks = "1 month") +
+  coord_cartesian(xlim = c(as.Date("2020-05-01"),as.Date("2021-04-01")))+
+  ylim(-2,6) +
+  labs(x='', y='',
+       title = "Variação mensal IBC-Br (%)",
+       caption='Fonte: BCB. Elaboração: UFABC Finance Macro')
+
+```
+
+```{r}
+## Gráfico 2. IBC-br desazonalizado valor de 2019 até agora
+
+tail(ibc_df,24) %>%
+  ggplot(aes(x=date,y= ibc_saz))+
+  geom_line(col = '#990000',
+            size = 1)+
+  theme_clean() +
+  theme(axis.text.x = element_text(angle=90), 
+        legend.background = element_blank(), 
+        legend.title = element_blank(),
+        plot.background = element_blank())+
+  scale_x_date(labels = date_format("%b/%y"), 
+               date_breaks = "2 month") +
+  ylim(120,145)+
+  coord_cartesian(xlim = c(as.Date("2019-04-01"),as.Date("2021-04-01")))+
+  labs(x='', y='',
+       title = "Trajetória do IBC-Br dessazonalizado nos últimos 24 meses",
+       subtitle = "",
+       caption='Fonte: BCB. Elaboração: UFABC Finance Macro')
+  
+```
+
